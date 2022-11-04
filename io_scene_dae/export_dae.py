@@ -85,6 +85,14 @@ def numarr_alpha(a, mult=1.0):
     s += " "
     return s
 
+def numarr_color(a, alpha=1.0):
+    s = " "
+    for x in a:
+        s += " {}".format(x)
+    s += " {}".format(alpha)
+    s += " "
+    return s
+
 
 def strarr(arr):
     s = " "
@@ -104,6 +112,11 @@ class DaeExporter:
     def new_id(self, t):
         self.last_id += 1
         return "id-{}-{}".format(t, self.last_id)
+
+    class MatReference:
+        def __init__(self):
+            self.list = []
+            self.uvList = []
 
     class Vertex:
 
@@ -224,7 +237,7 @@ class DaeExporter:
         self.image_cache[image] = imgid
         return imgid
 
-    def export_material(self, material, double_sided_hint=True):
+    def export_material(self, material, defaultUv, double_sided_hint=True):
         material_id = self.material_cache.get(material)
         if material_id:
             return material_id
@@ -240,15 +253,27 @@ class DaeExporter:
         specular_tex = None
         emission_tex = None
         normal_tex = None
+        add_tex = None
+        map_tex = None # map texture for add
+
+        diffuse_uv = None
+        specular_uv = None
+        emission_uv = None
+        normal_uv = None
+        add_uv = None
+        map_uv = None 
+
+        from . import matutil
+
+        matWalker = matutil.MatWalker()
+        matInfo = matWalker.getMaterialInfo(material) if material else None
         
-        #TODO, use Blender 2.8 principled shader and connected maps
-        mat_wrap = node_shader_utils.PrincipledBSDFWrapper(material) if material else None
-        
-        if mat_wrap:
-            textures_keys = ["base_color_texture", "specular_texture", "normalmap_texture"]
+        if matInfo:
+            tex_keys = ["diffuseTex", "addTex", "specTex", "normalTex","mapTex"]
             
-            for i, tkey in enumerate(textures_keys):
-                tex = getattr(mat_wrap, tkey, None)
+            # for i, tkey in enumerate(textures_keys):
+            for i, tkey in enumerate(tex_keys):
+                tex = matInfo.getText(tkey)
                 if tex == None:
                     continue
                 if tex.image == None:
@@ -275,64 +300,23 @@ class DaeExporter:
                 self.writel(S_FX, 3, "</newparam>")
                 sampler_table[i] = sampler_sid
                 
-                if tkey == "base_color_texture" and diffuse_tex is None:
+                if tkey == "diffuseTex" and diffuse_tex is None:
                     diffuse_tex = sampler_sid
-                if tkey == "specular_texture" and specular_tex is None:
+                if tkey == "specTex" and specular_tex is None:
                     specular_tex = sampler_sid
-                """
-                # TODO differently, no emission input in the principled shader
-                if ts.use_map_emit and emission_tex is None:
-                    emission_tex = sampler_sid
-                """
-                if tkey == "normalmap_texture" and normal_tex is None:
+                if tkey == "addTex" and add_tex is None:
+                    add_tex = sampler_sid
+                if tkey == "mapTex" and map_tex is None:
+                    map_tex = sampler_sid
+                if tkey == "normalTex" and normal_tex is None:
                     normal_tex = sampler_sid
         
-        """
-        for i in range(len(material.texture_slots)):
-            ts = material.texture_slots[i]
-            if not ts:
-                continue
-            if not ts.use:
-                continue
-            if not ts.texture:
-                continue
-            if ts.texture.type != "IMAGE":
-                continue
+        diffuse_uv = matInfo.diffuseUv if matInfo.diffuseUv is not None else defaultUv
+        specular_uv = matInfo.specUv if matInfo.specUv is not None else defaultUv
+        add_uv = matInfo.addUv if matInfo.addUv is not None else defaultUv
+        map_uv = matInfo.mapUv if matInfo.mapUv is not None else defaultUv
+        normal_uv = matInfo.normalUv if matInfo.normalUv is not None else defaultUv
 
-            if ts.texture.image is None:
-                continue
-
-            # Image
-            imgid = self.export_image(ts.texture.image)
-
-            # Surface
-            surface_sid = self.new_id("fx_surf")
-            self.writel(S_FX, 3, "<newparam sid=\"{}\">".format(surface_sid))
-            self.writel(S_FX, 4, "<surface type=\"2D\">")
-            self.writel(S_FX, 5, "<init_from>{}</init_from>".format(imgid))
-            self.writel(S_FX, 5, "<format>A8R8G8B8</format>")
-            self.writel(S_FX, 4, "</surface>")
-            self.writel(S_FX, 3, "</newparam>")
-
-            # Sampler
-            sampler_sid = self.new_id("fx_sampler")
-            self.writel(S_FX, 3, "<newparam sid=\"{}\">".format(sampler_sid))
-            self.writel(S_FX, 4, "<sampler2D>")
-            self.writel(S_FX, 5, "<source>{}</source>".format(surface_sid))
-            self.writel(S_FX, 4, "</sampler2D>")
-            self.writel(S_FX, 3, "</newparam>")
-            sampler_table[i] = sampler_sid
-
-            if ts.use_map_color_diffuse and diffuse_tex is None:
-                diffuse_tex = sampler_sid
-            if ts.use_map_color_spec and specular_tex is None:
-                specular_tex = sampler_sid
-            if ts.use_map_emit and emission_tex is None:
-                emission_tex = sampler_sid
-            if ts.use_map_normal and normal_tex is None:
-                normal_tex = sampler_sid
-        """
-        
         self.writel(S_FX, 3, "<technique sid=\"common\">")
         shtype = "blinn"
         self.writel(S_FX, 4, "<{}>".format(shtype))
@@ -340,48 +324,48 @@ class DaeExporter:
         self.writel(S_FX, 5, "<emission>")
         if emission_tex is not None:
             self.writel(
-                S_FX, 6, "<texture texture=\"{}\" texcoord=\"CHANNEL1\"/>"
-                .format(emission_tex))
+                S_FX, 6, "<texture texture=\"{}\" texcoord=\"{}\"/>"
+                .format(emission_tex, diffuse_uv))
         else:
             # TODO: More accurate coloring, if possible     
             self.writel(S_FX, 6, "<color>{}</color>".format(
-                numarr_alpha(material.diffuse_color, 1.0)))#material.emit is removed in Blender 2.8             
+                numarr_color(matInfo.emission_color, matInfo.emission_strength)))#material.emit is removed in Blender 2.8             
         self.writel(S_FX, 5, "</emission>")
 
         self.writel(S_FX, 5, "<ambient>")
         self.writel(S_FX, 6, "<color>{}</color>".format(
-            numarr_alpha((0.0,0.0,0.0), 1.0)))# self.scene.world.ambient_color and material.ambient are removed too
+            numarr_color((0.0,0.0,0.0), 1.0)))# self.scene.world.ambient_color and material.ambient are removed too
         self.writel(S_FX, 5, "</ambient>")
 
         self.writel(S_FX, 5, "<diffuse>")
         if diffuse_tex is not None:
             self.writel(
-                S_FX, 6, "<texture texture=\"{}\" texcoord=\"CHANNEL1\"/>"
-                .format(diffuse_tex))
+                S_FX, 6, "<texture texture=\"{}\" texcoord=\"{}\"/>"
+                .format(diffuse_tex, diffuse_uv))
         else:
-            self.writel(S_FX, 6, "<color>{}</color>".format(numarr_alpha(
-                material.diffuse_color, 0.8)))# material.diffuse_intensity is removed too
+            self.writel(S_FX, 6, "<color>{}</color>".format(numarr_color(
+                matInfo.base_color, matInfo.alpha)))
         self.writel(S_FX, 5, "</diffuse>")
 
         self.writel(S_FX, 5, "<specular>")
         if specular_tex is not None:
             self.writel(
                 S_FX, 6,
-                "<texture texture=\"{}\" texcoord=\"CHANNEL1\"/>".format(
-                    specular_tex))
+                "<texture texture=\"{}\" texcoord=\"{}\"/>".format(
+                    specular_tex, specular_uv))
         else:
-            self.writel(S_FX, 6, "<color>{}</color>".format(numarr_alpha(
-                material.specular_color, material.specular_intensity)))
+            self.writel(S_FX, 6, "<color>{}</color>".format(numarr_color(
+                (1.0,1.0,1.0), matInfo.specular)))
         self.writel(S_FX, 5, "</specular>")
 
         self.writel(S_FX, 5, "<shininess>")
         self.writel(S_FX, 6, "<float>{}</float>".format(
-            50))# material.specular_hardness is removed too
+            1.0 - matInfo.roughness)) 
         self.writel(S_FX, 5, "</shininess>")
 
         self.writel(S_FX, 5, "<reflective>")
         self.writel(S_FX, 6, "<color>{}</color>".format(
-            numarr_alpha((0.5,0.5,0.5))))# material.mirror_color is removed too
+            numarr_color((1.0,1.0,1.0),matInfo.metallic)))
         self.writel(S_FX, 5, "</reflective>")
 
         """
@@ -393,7 +377,7 @@ class DaeExporter:
         """
         
         self.writel(S_FX, 5, "<index_of_refraction>")
-        self.writel(S_FX, 6, "<float>{}</float>".format(1.2))#material.specular_ior is removed too
+        self.writel(S_FX, 6, "<float>{}</float>".format(matInfo.ior))
         self.writel(S_FX, 5, "</index_of_refraction>")
 
         self.writel(S_FX, 4, "</{}>".format(shtype))
@@ -404,9 +388,23 @@ class DaeExporter:
             self.writel(S_FX, 6, "<bump bumptype=\"NORMALMAP\">")
             self.writel(
                 S_FX, 7,
-                "<texture texture=\"{}\" texcoord=\"CHANNEL1\"/>".format(
-                    normal_tex))
+                "<texture texture=\"{}\" texcoord=\"{}\"/>".format(
+                    normal_tex, normal_uv))
             self.writel(S_FX, 6, "</bump>")
+        if (add_tex):
+            self.writel(S_FX, 6, "<add type=\"ADD\">")
+            self.writel(
+                S_FX, 7,
+                "<texture texture=\"{}\" texcoord=\"{}\"/>".format(
+                    add_tex, add_uv))
+            self.writel(S_FX, 6, "</add>")
+        if (map_tex):
+            self.writel(S_FX, 6, "<map type=\"MAP\">")
+            self.writel(
+                S_FX, 7,
+                "<texture texture=\"{}\" texcoord=\"{}\"/>".format(
+                    map_tex, map_uv))
+            self.writel(S_FX, 6, "</map>")
 
         self.writel(S_FX, 5, "</technique>")
         self.writel(S_FX, 5, "<technique profile=\"GOOGLEEARTH\">")
@@ -639,8 +637,7 @@ class DaeExporter:
             bm.free()
 
         #mesh.update(calc_tessface=True)# 2.79
-        #mesh.update(calc_edges=False, calc_edges_loose=False, calc_loop_triangles=True)# 2.80
-        mesh.update(calc_edges=False, calc_edges_loose=False)# 3.0.1
+        mesh.update(calc_edges=False, calc_edges_loose=False)# 2.80
         vertices = []
         vertex_map = {}
         surface_indices = {}
@@ -673,6 +670,9 @@ class DaeExporter:
         else:
             mesh.calc_normals_split()
             has_tangents = False
+        defaultUv = None
+        if len(mesh.uv_layers) > 0:
+            defaultUv = mesh.uv_layers[0].name
 
         for fi in range(len(mesh.polygons)):
             f = mesh.polygons[fi]
@@ -688,7 +688,7 @@ class DaeExporter:
                 
                 if (mat is not None):               
                     materials[f.material_index] = self.export_material(
-                        mat, True)#True = deprecated mesh.show_double_sided value, which is removed from Blender 2.8
+                        mat, defaultUv, True)#True = deprecated mesh.show_double_sided value, which is removed from Blender 2.8
                 else:
                     materials[f.material_index] = None
 
@@ -925,7 +925,11 @@ class DaeExporter:
                     S_GEOM, 3, "<{} count=\"{}\" material=\"{}\">".format(
                         prim_type,
                         int(len(indices)), matref))  # TODO: Implement material
-                mat_assign.append((mat, matref))
+                reference = self.MatReference()
+                reference.list = [mat, matref]
+                for uv in  mesh.uv_layers:
+                    reference.uvList.append(uv.name)
+                mat_assign.append(reference)
             else:
                 self.writel(S_GEOM, 3, "<{} count=\"{}\">".format(
                     prim_type, int(len(indices))))  # TODO: Implement material
@@ -1159,15 +1163,24 @@ class DaeExporter:
         elif (armature is None):
             self.writel(S_NODES, il, "<instance_geometry url=\"#{}\">".format(
                 meshdata["id"]))
-
         if (len(meshdata["material_assign"]) > 0):
             self.writel(S_NODES, il + 1, "<bind_material>")
             self.writel(S_NODES, il + 2, "<technique_common>")
             for m in meshdata["material_assign"]:
                 self.writel(
                     S_NODES, il + 3,
-                    "<instance_material symbol=\"{}\" target=\"#{}\"/>".format(
-                        m[1], m[0]))
+                    "<instance_material symbol=\"{}\" target=\"#{}\">".format(
+                        m.list[1], m.list[0]))
+                uvInd = 0
+                for uvMap in m.uvList:
+                    if uvMap is not None:
+                        self.writel(
+                            S_NODES, il + 4,
+                            "<bind_vertex_input semantic=\"{}\" input_semantic=\"TEXCOORD\" input_set=\"{}\"/>".format(uvMap, uvInd))
+                        uvInd = uvInd + 1
+                self.writel(
+                    S_NODES, il + 3,
+                    "</instance_material>")
 
             self.writel(S_NODES, il + 2, "</technique_common>")
             self.writel(S_NODES, il + 1, "</bind_material>")
@@ -1370,8 +1383,7 @@ class DaeExporter:
         self.writel(
             S_GEOM, 1, "<geometry id=\"{}\" name=\"{}\">".format(
                 splineid, curve.name))
-        self.writel(S_GEOM, 2, "<spline closed=\"{}\">".format(
-                "true" if curve.splines and curve.splines[0].use_cyclic_u else "false"))
+        self.writel(S_GEOM, 2, "<spline closed=\"0\">")
 
         points = []
         interps = []
@@ -1589,10 +1601,14 @@ class DaeExporter:
                     break
             """
             # use collections instead of layers
+            """
             for col in node.users_collection:
                 if col.hide_viewport == True:
                     valid = False
                     break
+            """
+            if (node.hide_render):
+                valid = False
                     
             if (not valid):
                 return False

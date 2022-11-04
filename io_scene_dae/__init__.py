@@ -20,18 +20,17 @@ from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty
 
 from bpy_extras.io_utils import ExportHelper
 bl_info = {
-    "name": "Better Collada Exporter",
-    "author": "Juan Linietsky, artell, Panthavma",
-    "version": (1, 10, 11),
-    "blender": (3, 0, 1),
-    "api": 38691,
+    "name": "Nodes Better Collada Exporter",
+    "author": "Juan Linietsky, artell, Panthavma, small changes: Bira Neto",
+    "version": (1, 0, 0),
+    "blender": (2, 80, 0),
     "location": "File > Import-Export",
-    "description": ("Export DAE Scenes. This plugin actually works better! "
-                    "Otherwise contact the Godot Engine community."),
+    "description": ("Export DAE Scenes. Based on the Godot Engine Community exporter, all credits to them."
+                    "Visit the godotengine @ github for the orinal exporter."),
     "warning": "",
     "wiki_url": ("https://godotengine.org"),
-    "tracker_url": "https://github.com/godotengine/collada-exporter",
-    "support": "OFFICIAL",
+    "tracker_url": "https://github.com/biraneto/cycles-collada-exporter",
+    "support": "TESTING",
     "category": "Import-Export"}
 
 if "bpy" in locals():
@@ -68,7 +67,7 @@ class CE_OT_export_dae(bpy.types.Operator, ExportHelper):
         name="Selected Objects",
         description="Export only selected objects (and visible in active "
                     "layers if that applies).",
-        default=False,
+        default=True,
         )
     use_mesh_modifiers : BoolProperty(
         name="Apply Modifiers",
@@ -85,12 +84,12 @@ class CE_OT_export_dae(bpy.types.Operator, ExportHelper):
         name="Tangent Arrays",
         description="Export Tangent and Binormal arrays "
                     "(for normalmapping).",
-        default=False,
+        default=True,
         )
     use_triangles : BoolProperty(
         name="Triangulate",
         description="Export Triangles instead of Polygons.",
-        default=False,
+        default=True,
         )
 
     use_copy_images : BoolProperty(
@@ -174,7 +173,7 @@ class CE_OT_export_dae(bpy.types.Operator, ExportHelper):
 
 
 def menu_func(self, context):
-    self.layout.operator(CE_OT_export_dae.bl_idname, text="Better Collada (.dae)")
+    self.layout.operator(CE_OT_export_dae.bl_idname, text="Nodes Better Collada (.dae)")
 
 	
 #classes = (CE_OT_export_dae)
