@@ -269,11 +269,12 @@ class DaeExporter:
         matInfo = matWalker.getMaterialInfo(material) if material else None
         
         if matInfo:
-            tex_keys = ["diffuseTex", "addTex", "specTex", "normalTex","mapTex"]
+            tex_keys = ["diffuse", "add", "spec", "normal","map"]
             
             # for i, tkey in enumerate(textures_keys):
             for i, tkey in enumerate(tex_keys):
-                tex = matInfo.getText(tkey)
+                tex = matInfo.getText(tkey + "Tex")
+                texWrap = matInfo.getText(tkey + "Wrap")
                 if tex == None:
                     continue
                 if tex.image == None:
@@ -296,19 +297,21 @@ class DaeExporter:
                 self.writel(S_FX, 3, "<newparam sid=\"{}\">".format(sampler_sid))
                 self.writel(S_FX, 4, "<sampler2D>")
                 self.writel(S_FX, 5, "<source>{}</source>".format(surface_sid))
+                self.writel(S_FX, 5, "<wrap_s>{}</wrap_s>".format(texWrap))
+                self.writel(S_FX, 5, "<wrap_t>{}</wrap_t>".format(texWrap))
                 self.writel(S_FX, 4, "</sampler2D>")
                 self.writel(S_FX, 3, "</newparam>")
                 sampler_table[i] = sampler_sid
                 
-                if tkey == "diffuseTex" and diffuse_tex is None:
+                if tkey == "diffuse" and diffuse_tex is None:
                     diffuse_tex = sampler_sid
-                if tkey == "specTex" and specular_tex is None:
+                if tkey == "spec" and specular_tex is None:
                     specular_tex = sampler_sid
-                if tkey == "addTex" and add_tex is None:
+                if tkey == "add" and add_tex is None:
                     add_tex = sampler_sid
-                if tkey == "mapTex" and map_tex is None:
+                if tkey == "map" and map_tex is None:
                     map_tex = sampler_sid
-                if tkey == "normalTex" and normal_tex is None:
+                if tkey == "normal" and normal_tex is None:
                     normal_tex = sampler_sid
         
         diffuse_uv = matInfo.diffuseUv if matInfo.diffuseUv is not None else defaultUv
@@ -399,7 +402,7 @@ class DaeExporter:
                     add_tex, add_uv))
             self.writel(S_FX, 6, "</add>")
         if (map_tex):
-            self.writel(S_FX, 6, "<map type=\"MAP\">")
+            self.writel(S_FX, 6, "<map type=\"{}\">".format(matInfo.mapType))
             self.writel(
                 S_FX, 7,
                 "<texture texture=\"{}\" texcoord=\"{}\"/>".format(

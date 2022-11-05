@@ -27,12 +27,16 @@ class MatInfo:
         self.specTex = None
         self.normalTex = None
         self.mapTex = None
-        self.normalUv = -1
-        self.addUv = -1
-        self.diffuseUv = -1
-        self.specUv = -1
-        self.mapUv = -1
-        self.mixNode = None
+        self.diffuseUv = None
+        self.addUv = None
+        self.specUv = None
+        self.normalUv = None        
+        self.mapUv = None
+        self.diffuseWrap = "WRAP"
+        self.addWrap = "WRAP"
+        self.specWrap = "WRAP"
+        self.normalWrap = "WRAP"        
+        self.mapWrap = "WRAP"
         self.emission_color = (0.0,0.0,0.0)
         self.emission_strength = 1.0
         self.base_color = (1.0,1.0,1.0)
@@ -41,6 +45,7 @@ class MatInfo:
         self.metallic = 0.0
         self.roughness = 0.5
         self.ior = 1.45
+        self.mapType = "Alpha"
     def getText(self, key):
         return getattr(self, key, None)
 
@@ -113,7 +118,11 @@ class MatWalker:
                     for link in node.links:
                         fromNode = link.from_node
                         fromSocket = link.from_socket
-                        if fromSocket.identifier == "Color" and fromNode.bl_idname == "ShaderNodeTexImage" and link.to_socket.bl_idname != "NodeSocketColor":
+                        if fromNode.bl_idname == "ShaderNodeTexImage" and link.to_socket.name == "Fac":
+                            if fromSocket.identifier == "Alpha":
+                                self.info.mapType = "Alpha"
+                            if fromSocket.identifier == "Color":
+                                self.info.mapType = "Color"
                             return fromNode
                         else:
                             newList.append(fromNode)
@@ -169,6 +178,8 @@ class MatWalker:
                     for link in node.links:
                         if node.identifier == "Normal" and link.to_socket.bl_idname == "NodeSocketVector":
                             fromNode = link.from_node
+                            if hasattr(fromNode, 'uv_map'):
+                                self.info.normalUv = fromNode.uv_map
                             theTexture = self.loadTexture(fromNode)
                             if theTexture is not None:
                                 return theTexture
@@ -233,21 +244,20 @@ class MatWalker:
             bumpText = self.loadBumpTexture(mainBSDF)
             addText = self.loadBSDFTexture(mainBSDF, mainText)
             mapText = self.loadBSDFMapTexture(mainBSDF)
+            
             if addText is not None:
-                addUv = self.loadUVIndex(addText)
+                self.info.addUv = self.loadUVIndex(addText)
             if bumpText is not None:
-                bumpUv = self.loadUVIndex(bumpText)
+                if self.info.normalUv is None:
+                    self.info.normalUv = self.loadUVIndex(bumpText)
+                
             if specText is not None:
-                specUv = self.loadUVIndex(specText)
+                self.info.specUv = self.loadUVIndex(specText)
             if mapText is not None:
-                mapUv = self.loadUVIndex(mapText)
-            mainUv = None
-            addUv = None
-            bumpUv = None
-            specUv = None
-            mapUv = None
+                self.info.mapUv = self.loadUVIndex(mapText)
+            
             if mainText is not None:
-                mainUv = self.loadUVIndex(mainText)
+                self.info.diffuseUv = self.loadUVIndex(mainText)
 
             if mainBSDF is not None:
                 self.info.emission_color = (mainBSDF.inputs["Emission"].default_value[0],  mainBSDF.inputs["Emission"].default_value[1],  mainBSDF.inputs["Emission"].default_value[2])
@@ -261,15 +271,15 @@ class MatWalker:
             
             self.info.mainBSDF = mainBSDF
             self.info.diffuseTex = mainText
+            self.info.diffuseWrap = "WRAP" if mainText.extension == "REPEAT" else "CLAMP"
             self.info.addTex = addText
+            self.info.addWrap = "WRAP" if addText.extension == "REPEAT" else "CLAMP"
             self.info.specTex = specText
+            self.info.specWrap = "WRAP" if specText.extension == "REPEAT" else "CLAMP"
             self.info.normalTex = bumpText
+            self.info.normalWrap = "WRAP" if bumpText.extension == "REPEAT" else "CLAMP"
             self.info.mapTex = mapText
-            self.info.normalUv = bumpUv
-            self.info.addUv = addUv
-            self.info.diffuseUv = mainUv
-            self.info.specUv = specUv
-            self.info.mapUv = mapUv
+            self.info.mapWrap = "WRAP" if mapText.extension == "REPEAT" else "CLAMP"
             
         return self.info
 
