@@ -271,15 +271,20 @@ class MatWalker:
             
             self.info.mainBSDF = mainBSDF
             self.info.diffuseTex = mainText
-            self.info.diffuseWrap = "WRAP" if mainText.extension == "REPEAT" else "CLAMP"
+            if mainText is not None :
+                self.info.diffuseWrap = "WRAP" if mainText.extension == "REPEAT" else "CLAMP"
             self.info.addTex = addText
-            self.info.addWrap = "WRAP" if addText.extension == "REPEAT" else "CLAMP"
+            if addText is not None :
+                self.info.addWrap = "WRAP" if addText.extension == "REPEAT" else "CLAMP"
             self.info.specTex = specText
-            self.info.specWrap = "WRAP" if specText.extension == "REPEAT" else "CLAMP"
+            if specText is not None :
+                self.info.specWrap = "WRAP" if specText.extension == "REPEAT" else "CLAMP"
             self.info.normalTex = bumpText
-            self.info.normalWrap = "WRAP" if bumpText.extension == "REPEAT" else "CLAMP"
+            if bumpText is not None :
+                self.info.normalWrap = "WRAP" if bumpText.extension == "REPEAT" else "CLAMP"
             self.info.mapTex = mapText
-            self.info.mapWrap = "WRAP" if mapText.extension == "REPEAT" else "CLAMP"
+            if mapText is not None :
+                self.info.mapWrap = "WRAP" if mapText.extension == "REPEAT" else "CLAMP"
             
         return self.info
 
